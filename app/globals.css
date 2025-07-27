@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -12,6 +10,7 @@
   body {
     @apply bg-gray-900 text-gray-100;
     background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
   }
 }
 
@@ -106,51 +105,47 @@
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
   }
   50% {
-    box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
   }
 }
 
-/* Raycast-inspired scrollbar */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(31, 41, 55, 0.5);
-  border-radius: 4px;
+  @apply bg-gray-800/50;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(239, 68, 68, 0.6);
-  border-radius: 4px;
+  @apply bg-gray-600 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(239, 68, 68, 0.8);
+  @apply bg-gray-500;
 }
 
-/* Superhuman-inspired focus states */
+/* Focus styles */
 *:focus {
-  outline: 2px solid rgba(239, 68, 68, 0.5);
-  outline-offset: 2px;
+  @apply outline-none ring-2 ring-red-500 ring-opacity-50;
 }
 
-/* Raycast-inspired loading states */
+/* Loading animation */
 .loading-dots {
-  display: inline-block;
+  @apply relative;
 }
 
 .loading-dots::after {
   content: '';
-  animation: loadingDots 1.5s infinite;
+  @apply absolute inset-0 bg-gray-800/50 rounded-lg;
+  animation: loadingDots 1.5s ease-in-out infinite;
 }
 
 @keyframes loadingDots {
-  0%, 20% { content: ''; }
-  40% { content: '.'; }
-  60% { content: '..'; }
-  80%, 100% { content: '...'; }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
 } 
