@@ -234,7 +234,7 @@ export interface Permission {
 export interface ServiceConnection {
   id: string
   name: string
-  status: 'connected' | 'disconnected' | 'connecting'
+  status: 'connected' | 'disconnected' | 'connecting' | 'syncing'
   lastSync?: Date
 }
 

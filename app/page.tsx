@@ -107,6 +107,29 @@ export default function HomePage() {
     setConnectedServices(prev => prev.filter(s => s.id !== serviceId))
   }
 
+  // Show notification
+  const showNotification = (message: string) => {
+    // Create a temporary notification element
+    const notification = document.createElement('div')
+    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300'
+    notification.textContent = message
+    
+    document.body.appendChild(notification)
+    
+    // Animate in
+    setTimeout(() => {
+      notification.classList.remove('translate-x-full')
+    }, 100)
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.classList.add('translate-x-full')
+      setTimeout(() => {
+        document.body.removeChild(notification)
+      }, 300)
+    }, 3000)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
@@ -238,10 +261,17 @@ export default function HomePage() {
             {/* Metrics */}
                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                <motion.div 
-                 className="card"
+                 className="card cursor-pointer hover:shadow-lg transition-shadow"
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.1 }}
+                 onClick={() => {
+                   setActiveTab('search')
+                   setSelectedCategories([])
+                   setSelectedSources([])
+                   setSelectedPriorities([])
+                   showNotification('Showing all data items')
+                 }}
                >
                  <div className="flex items-center">
                    <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
@@ -255,10 +285,14 @@ export default function HomePage() {
                </motion.div>
                
                <motion.div 
-                 className="card"
+                 className="card cursor-pointer hover:shadow-lg transition-shadow"
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.2 }}
+                 onClick={() => {
+                   setActiveTab('analytics')
+                   showNotification('Showing hashtag analytics')
+                 }}
                >
                  <div className="flex items-center">
                    <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
@@ -272,10 +306,13 @@ export default function HomePage() {
                </motion.div>
                
                <motion.div 
-                 className="card"
+                 className="card cursor-pointer hover:shadow-lg transition-shadow"
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.3 }}
+                 onClick={() => {
+                   showNotification(`Connected services: ${connectedServices.filter(s => s.status === 'connected').map(s => s.name).join(', ')}`)
+                 }}
                >
                  <div className="flex items-center">
                    <div className="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
@@ -291,10 +328,15 @@ export default function HomePage() {
                </motion.div>
                
                <motion.div 
-                 className="card"
+                 className="card cursor-pointer hover:shadow-lg transition-shadow"
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.4 }}
+                 onClick={() => {
+                   setActiveTab('search')
+                   setSelectedPriorities(['High'])
+                   showNotification('Showing high priority items')
+                 }}
                >
                  <div className="flex items-center">
                    <div className="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center">
@@ -312,7 +354,18 @@ export default function HomePage() {
 
             {/* Recent Items */}
             <div className="card">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Items</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900">Recent Items</h3>
+                <button
+                  onClick={() => {
+                    setActiveTab('search')
+                    showNotification('Switched to search view')
+                  }}
+                  className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors"
+                >
+                  View All
+                </button>
+              </div>
               <div className="space-y-4">
                 {filteredData.slice(0, 5).map((item, index) => (
                   <motion.div
@@ -320,7 +373,12 @@ export default function HomePage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setActiveTab('search')
+                      setSearchQuery(item.title.split(' ')[0])
+                      showNotification(`Searching for "${item.title.split(' ')[0]}"`)
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -337,17 +395,38 @@ export default function HomePage() {
                         
                         <div className="flex flex-wrap gap-2">
                           {item.hashtags.map((hashtag) => (
-                            <span key={hashtag} className="hashtag">
+                            <span 
+                              key={hashtag} 
+                              className="hashtag cursor-pointer hover:bg-blue-200 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setActiveTab('search')
+                                setSearchQuery(hashtag)
+                                showNotification(`Searching for #${hashtag}`)
+                              }}
+                              title={`Click to search for #${hashtag}`}
+                            >
                               {hashtag}
                             </span>
                           ))}
                         </div>
                       </div>
                       
-                      <div className="ml-4">
+                      <div className="ml-4 flex flex-col space-y-2">
                         <span className={`source-badge ${item.source}-badge`}>
                           {item.source.toUpperCase()}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigator.clipboard.writeText(item.title)
+                            showNotification('Title copied to clipboard!')
+                          }}
+                          className="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded hover:bg-gray-100"
+                          title="Copy title"
+                        >
+                          <DocumentTextIcon className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -429,30 +508,114 @@ export default function HomePage() {
 
             {/* Search Results */}
             <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Results ({filteredData.length} items)
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Results ({filteredData.length} items)
+                </h3>
+                {filteredData.length > 0 && (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        const dataStr = JSON.stringify(filteredData, null, 2)
+                        const dataBlob = new Blob([dataStr], { type: 'application/json' })
+                        const url = URL.createObjectURL(dataBlob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.download = 'search-results.json'
+                        link.click()
+                        URL.revokeObjectURL(url)
+                        showNotification('Search results exported!')
+                      }}
+                      className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+                    >
+                      Export Results
+                    </button>
+                    <button
+                      onClick={() => {
+                        const csvContent = [
+                          ['Title', 'Content', 'Source', 'Category', 'Priority', 'Hashtags', 'Timestamp'],
+                          ...filteredData.map(item => [
+                            item.title,
+                            item.content,
+                            item.source,
+                            item.category,
+                            item.priority,
+                            item.hashtags.join(', '),
+                            item.timestamp.toLocaleDateString()
+                          ])
+                        ].map(row => row.map(field => `"${field}"`).join(',')).join('\n')
+                        
+                        const dataBlob = new Blob([csvContent], { type: 'text/csv' })
+                        const url = URL.createObjectURL(dataBlob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.download = 'search-results.csv'
+                        link.click()
+                        URL.revokeObjectURL(url)
+                        showNotification('Search results exported as CSV!')
+                      }}
+                      className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="space-y-4">
                 {filteredData.map((item) => (
-                  <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">{item.title}</h4>
-                    <p className="text-gray-600 text-sm mb-3">{item.content}</p>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4 text-sm text-gray-500">
-                        <span className="capitalize">{item.source}</span>
-                        <span>•</span>
-                        <span>{item.category}</span>
-                        <span>•</span>
-                        <span>{item.priority}</span>
+                  <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">{item.title}</h4>
+                        <p className="text-gray-600 text-sm mb-3">{item.content}</p>
+                        
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                          <span className="capitalize">{item.source}</span>
+                          <span>•</span>
+                          <span>{item.category}</span>
+                          <span>•</span>
+                          <span>{item.priority}</span>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {item.hashtags.map((hashtag) => (
+                            <span 
+                              key={hashtag} 
+                              className="hashtag cursor-pointer hover:bg-blue-200 transition-colors"
+                              onClick={() => {
+                                setSearchQuery(hashtag)
+                                showNotification(`Searching for #${hashtag}`)
+                              }}
+                              title={`Click to search for #${hashtag}`}
+                            >
+                              {hashtag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                       
-                      <div className="flex flex-wrap gap-2">
-                        {item.hashtags.map((hashtag) => (
-                          <span key={hashtag} className="hashtag">
-                            {hashtag}
-                          </span>
-                        ))}
+                      <div className="ml-4 flex flex-col space-y-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.title)
+                            showNotification('Title copied to clipboard!')
+                          }}
+                          className="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded hover:bg-gray-100"
+                          title="Copy title"
+                        >
+                          <DocumentTextIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const shareText = `${item.title}\n\n${item.content}\n\nHashtags: ${item.hashtags.join(', ')}`
+                            navigator.clipboard.writeText(shareText)
+                            showNotification('Content copied to clipboard!')
+                          }}
+                          className="text-gray-400 hover:text-green-500 transition-colors p-1 rounded hover:bg-gray-100"
+                          title="Copy content"
+                        >
+                          <ChatBubbleLeftRightIcon className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -479,7 +642,13 @@ export default function HomePage() {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: index * 0.05 }}
-                    className="hashtag cursor-pointer hover:bg-blue-200"
+                    className="hashtag cursor-pointer hover:bg-blue-200 transition-all duration-200 hover:scale-110"
+                    onClick={() => {
+                      setActiveTab('search')
+                      setSearchQuery(stat.hashtag)
+                      showNotification(`Searching for #${stat.hashtag}`)
+                    }}
+                    title={`Click to search for #${stat.hashtag}`}
                   >
                     {stat.hashtag}
                     <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">
@@ -487,6 +656,24 @@ export default function HomePage() {
                     </span>
                   </motion.div>
                 ))}
+              </div>
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => {
+                    const dataStr = JSON.stringify(hashtagStats, null, 2)
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+                    const url = URL.createObjectURL(dataBlob)
+                    const link = document.createElement('a')
+                    link.href = url
+                    link.download = 'hashtag-stats.json'
+                    link.click()
+                    URL.revokeObjectURL(url)
+                    showNotification('Hashtag statistics exported!')
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                >
+                  Export Hashtag Data
+                </button>
               </div>
             </div>
 
@@ -498,27 +685,89 @@ export default function HomePage() {
                   {Array.from(new Set(dataItems.map(item => item.source))).map(source => {
                     const count = dataItems.filter(item => item.source === source).length
                     return (
-                      <div key={source} className="flex items-center justify-between">
+                      <div 
+                        key={source} 
+                        className="flex items-center justify-between p-2 rounded hover:bg-gray-100 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setActiveTab('search')
+                          setSelectedSources([source])
+                          showNotification(`Filtering by source: ${source}`)
+                        }}
+                        title={`Click to filter by ${source}`}
+                      >
                         <span className="capitalize font-medium">{source}</span>
                         <span className="text-lg font-bold text-gray-900">{count}</span>
                       </div>
                     )
                   })}
                 </div>
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={() => {
+                      const sourceData = Array.from(new Set(dataItems.map(item => item.source))).map(source => ({
+                        source,
+                        count: dataItems.filter(item => item.source === source).length
+                      }))
+                      const dataStr = JSON.stringify(sourceData, null, 2)
+                      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+                      const url = URL.createObjectURL(dataBlob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = 'source-distribution.json'
+                      link.click()
+                      URL.revokeObjectURL(url)
+                      showNotification('Source distribution exported!')
+                    }}
+                    className="px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 transition-colors"
+                  >
+                    Export Data
+                  </button>
+                </div>
               </div>
               
-                             <div className="card">
-                 <h3 className="text-lg font-semibold text-white mb-4">Data by Category</h3>
+              <div className="card">
+                <h3 className="text-lg font-semibold text-white mb-4">Data by Category</h3>
                 <div className="space-y-3">
                   {Array.from(new Set(dataItems.map(item => item.category))).map(category => {
                     const count = dataItems.filter(item => item.category === category).length
                     return (
-                      <div key={category} className="flex items-center justify-between">
+                      <div 
+                        key={category} 
+                        className="flex items-center justify-between p-2 rounded hover:bg-gray-100 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setActiveTab('search')
+                          setSelectedCategories([category])
+                          showNotification(`Filtering by category: ${category}`)
+                        }}
+                        title={`Click to filter by ${category}`}
+                      >
                         <span className="font-medium">{category}</span>
                         <span className="text-lg font-bold text-gray-900">{count}</span>
                       </div>
                     )
                   })}
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={() => {
+                      const categoryData = Array.from(new Set(dataItems.map(item => item.category))).map(category => ({
+                        category,
+                        count: dataItems.filter(item => item.category === category).length
+                      }))
+                      const dataStr = JSON.stringify(categoryData, null, 2)
+                      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+                      const url = URL.createObjectURL(dataBlob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = 'category-distribution.json'
+                      link.click()
+                      URL.revokeObjectURL(url)
+                      showNotification('Category distribution exported!')
+                    }}
+                    className="px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 transition-colors"
+                  >
+                    Export Data
+                  </button>
                 </div>
               </div>
             </div>
