@@ -83,7 +83,11 @@ export default function HomePage() {
     // Add to connected services
     setConnectedServices(prev => [
       ...prev.filter(s => s.id !== serviceId),
-      { id: serviceId, name: service.name, status: 'connecting' }
+      { 
+        id: serviceId, 
+        name: service.name, 
+        status: 'connecting'
+      }
     ])
 
     // Simulate connection process
