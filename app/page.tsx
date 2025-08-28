@@ -13,11 +13,13 @@ import {
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
   CheckCircleIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { mockData, filterData, getHashtagStats } from '@/lib/data'
 import { DataItem, ServiceConnection } from '@/lib/types'
 import { AIAssistant } from '@/components/AIAssistant'
+import { dataProcessor, serviceAPI } from '@/lib/api'
 
 export default function HomePage() {
   // State management
@@ -72,10 +74,55 @@ export default function HomePage() {
     selectedPriorities
   )
 
-  // Get hashtag statistics
-  const hashtagStats = getHashtagStats(dataItems)
+  // Get hashtag statistics using centralized processing
+  const [hashtagStats, setHashtagStats] = useState<any[]>([])
 
-  // Connect service
+  // Update hashtag stats when data changes
+  useEffect(() => {
+    const updateStats = async () => {
+      try {
+        const stats = await dataProcessor.calculateHashtagStats(dataItems)
+        setHashtagStats(stats)
+      } catch (error) {
+        console.error('Failed to calculate hashtag stats:', error)
+        // Fallback to local calculation
+        setHashtagStats(getHashtagStats(dataItems))
+      }
+    }
+    
+    updateStats()
+  }, [dataItems])
+
+  // Sync all connected services
+  const syncAllServices = async () => {
+    try {
+      showNotification('Starting service synchronization...')
+      
+      const results = await serviceAPI.syncAllServices()
+      let totalNewItems = 0
+      
+      // Process data from each service
+      for (const [service, data] of Object.entries(results)) {
+        if (data.length > 0) {
+          const processedData = await processServiceData(data, service)
+          setDataItems(prev => [...prev, ...processedData])
+          totalNewItems += processedData.length
+        }
+      }
+      
+      if (totalNewItems > 0) {
+        showNotification(`Successfully synced ${totalNewItems} new items from all services!`)
+      } else {
+        showNotification('All services are up to date!')
+      }
+      
+    } catch (error) {
+      console.error('Service synchronization failed:', error)
+      showNotification('Service synchronization failed. Please try again.')
+    }
+  }
+
+  // Connect service with real API integration
   const connectService = async (serviceId: string) => {
     const service = services.find(s => s.id === serviceId)
     if (!service) return
@@ -90,8 +137,24 @@ export default function HomePage() {
       }
     ])
 
-    // Simulate connection process
-    setTimeout(() => {
+    try {
+      // Use real API service integration
+      let credentials
+      switch (serviceId) {
+        case 'gmail':
+          credentials = await serviceAPI.connectGmail('mock_auth_code')
+          break
+        case 'slack':
+          credentials = await serviceAPI.connectSlack('mock_auth_code')
+          break
+        case 'notion':
+          credentials = await serviceAPI.connectNotion('mock_auth_code')
+          break
+        default:
+          throw new Error('Unknown service')
+      }
+
+      // Update connection status
       setConnectedServices(prev => 
         prev.map(s => 
           s.id === serviceId 
@@ -99,12 +162,175 @@ export default function HomePage() {
             : s
         )
       )
-    }, 2000)
+
+      showNotification(`Successfully connected to ${service.name}!`)
+      
+      // Fetch initial data from the service
+      await fetchServiceData(serviceId)
+      
+    } catch (error) {
+      console.error(`Failed to connect to ${service.name}:`, error)
+      setConnectedServices(prev => 
+        prev.map(s => 
+          s.id === serviceId 
+            ? { ...s, status: 'disconnected' }
+            : s
+        )
+      )
+      showNotification(`Failed to connect to ${service.name}. Please try again.`)
+    }
   }
 
-  // Disconnect service
-  const disconnectService = (serviceId: string) => {
-    setConnectedServices(prev => prev.filter(s => s.id !== serviceId))
+  // Fetch data from connected service
+  const fetchServiceData = async (serviceId: string) => {
+    try {
+      let serviceData: any[] = []
+      
+      switch (serviceId) {
+        case 'gmail':
+          const gmailCredentials = serviceAPI.getServiceStatus('gmail') === 'connected' 
+            ? { accessToken: 'mock', expiresAt: new Date(Date.now() + 3600000), scope: [] }
+            : null
+          if (gmailCredentials) {
+            serviceData = await serviceAPI.fetchGmailData(gmailCredentials, 50)
+          }
+          break
+        case 'slack':
+          const slackCredentials = serviceAPI.getServiceStatus('slack') === 'connected'
+            ? { accessToken: 'mock', expiresAt: new Date(Date.now() + 7200000), scope: [] }
+            : null
+          if (slackCredentials) {
+            serviceData = await serviceAPI.fetchSlackData(slackCredentials, ['general'])
+          }
+          break
+        case 'notion':
+          const notionCredentials = serviceAPI.getServiceStatus('notion') === 'connected'
+            ? { accessToken: 'mock', expiresAt: new Date(Date.now() + 86400000), scope: [] }
+            : null
+          if (notionCredentials) {
+            serviceData = await serviceAPI.fetchNotionData(notionCredentials)
+          }
+          break
+      }
+
+      if (serviceData.length > 0) {
+        // Process and add new data
+        const processedData = await processServiceData(serviceData, serviceId)
+        setDataItems(prev => [...prev, ...processedData])
+        showNotification(`Fetched ${serviceData.length} new items from ${serviceId}`)
+      }
+    } catch (error) {
+      console.error(`Failed to fetch data from ${serviceId}:`, error)
+    }
+  }
+
+  // Process service data with centralized processing
+  const processServiceData = async (rawData: any[], source: string): Promise<DataItem[]> => {
+    const processedItems: DataItem[] = []
+    
+    for (const item of rawData) {
+      try {
+        // Use centralized hashtag extraction
+        const hashtags = await dataProcessor.extractHashtags(
+          `${item.title || item.subject || item.text} ${item.content || ''}`, 
+          source
+        )
+        
+        // Create standardized data item
+        const processedItem: DataItem = {
+          id: item.id,
+          title: item.title || item.subject || item.text || 'Untitled',
+          content: item.content || item.text || item.subject || '',
+          source: source as 'gmail' | 'slack' | 'notion',
+          channel: item.channel || item.labels?.join(', ') || '',
+          author: item.author || item.user || item.sender || 'Unknown',
+          timestamp: item.timestamp || item.lastEdited || new Date(),
+          hashtags: hashtags,
+          category: determineCategory(hashtags, source),
+          priority: determinePriority(hashtags, source),
+          sentiment: determineSentiment(item.content || item.text || '')
+        }
+        
+        processedItems.push(processedItem)
+      } catch (error) {
+        console.error('Error processing item:', error)
+      }
+    }
+    
+    return processedItems
+  }
+
+  // Determine category based on hashtags and source
+  const determineCategory = (hashtags: string[], source: string): string => {
+    const categoryKeywords = {
+      'Business': ['#urgent', '#meeting', '#budget', '#approval', '#strategy'],
+      'Product': ['#product', '#roadmap', '#features', '#development'],
+      'Team': ['#team', '#collaboration', '#daily', '#standup'],
+      'Technical': ['#tech', '#api', '#documentation', '#code'],
+      'Sales': ['#client', '#enterprise', '#demo', '#followup'],
+      'Design': ['#design', '#ui', '#components', '#ux']
+    }
+
+    for (const [category, keywords] of Object.entries(categoryKeywords)) {
+      if (hashtags.some(tag => keywords.includes(tag))) {
+        return category
+      }
+    }
+
+    // Default categories based on source
+    const sourceDefaults = {
+      'gmail': 'Communication',
+      'slack': 'Team',
+      'notion': 'Documentation'
+    }
+    
+    return sourceDefaults[source as keyof typeof sourceDefaults] || 'General'
+  }
+
+  // Determine priority based on hashtags and content
+  const determinePriority = (hashtags: string[], source: string): 'High' | 'Medium' | 'Low' => {
+    const highPriorityTags = ['#urgent', '#critical', '#asap', '#emergency']
+    const mediumPriorityTags = ['#important', '#followup', '#meeting', '#deadline']
+    
+    if (hashtags.some(tag => highPriorityTags.includes(tag))) {
+      return 'High'
+    }
+    
+    if (hashtags.some(tag => mediumPriorityTags.includes(tag))) {
+      return 'Medium'
+    }
+    
+    return 'Low'
+  }
+
+  // Determine sentiment based on content
+  const determineSentiment = (content: string): 'positive' | 'negative' | 'neutral' => {
+    const positiveWords = ['great', 'excellent', 'amazing', 'success', 'win', 'good', 'happy']
+    const negativeWords = ['bad', 'terrible', 'failed', 'error', 'problem', 'issue', 'urgent']
+    
+    const contentLower = content.toLowerCase()
+    const positiveCount = positiveWords.filter(word => contentLower.includes(word)).length
+    const negativeCount = negativeWords.filter(word => contentLower.includes(word)).length
+    
+    if (positiveCount > negativeCount) return 'positive'
+    if (negativeCount > positiveCount) return 'negative'
+    return 'neutral'
+  }
+
+  // Disconnect service using API
+  const disconnectService = async (serviceId: string) => {
+    try {
+      // Use API to disconnect service
+      serviceAPI.disconnectService(serviceId)
+      
+      // Update local state
+      setConnectedServices(prev => prev.filter(s => s.id !== serviceId))
+      
+      showNotification(`Successfully disconnected from ${serviceId}`)
+    } catch (error) {
+      console.error(`Failed to disconnect from ${serviceId}:`, error)
+      showNotification(`Failed to disconnect from ${serviceId}`)
+    }
   }
 
   // Show notification
@@ -144,6 +370,14 @@ export default function HomePage() {
               </div>
               
               <div className="flex items-center space-x-4">
+                <button
+                  onClick={syncAllServices}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-2"
+                  title="Sync all connected services"
+                >
+                  <ArrowPathIcon className="w-4 h-4" />
+                  <span>Sync All</span>
+                </button>
                 <span className="text-sm text-gray-300">Demo Mode</span>
                 <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse-glow"></div>
               </div>
